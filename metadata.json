@@ -1,0 +1,7 @@
+{
+  "name": "CareerIQ AI",
+  "description": "An Intelligent Multi-Agent Career Intelligence Platform powered by real career datasets, explainable skill gap analysis, and AI career guidance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
