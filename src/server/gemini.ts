@@ -26,7 +26,11 @@ export async function generateExplainableGuidance(prompt: string, systemInstruct
 
   for (const model of modelsToAttempt) {
     try {
-      const response = await ai.models.generateContent({
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout calling ${model}`)), 8000)
+      );
+
+      const apiPromise = ai.models.generateContent({
         model,
         contents: prompt,
         config: {
@@ -35,13 +39,15 @@ export async function generateExplainableGuidance(prompt: string, systemInstruct
         }
       });
 
+      const response = await Promise.race([apiPromise, timeoutPromise]);
+
       if (response && response.text) {
         return response.text;
       }
     } catch (err: any) {
       console.warn(`Model ${model} request failed, checking alternatives:`, err?.message || err);
-      // Wait 300ms before next attempt
-      await new Promise(r => setTimeout(r, 300));
+      // Wait 150ms before next attempt
+      await new Promise(r => setTimeout(r, 150));
     }
   }
 

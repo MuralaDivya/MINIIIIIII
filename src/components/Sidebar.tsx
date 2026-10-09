@@ -44,8 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, syste
     { key: 'aptitude' as NavItemKey, label: 'Aptitude Test', icon: BrainCircuit, badge: 'Diagnostic' },
     { key: 'communication' as NavItemKey, label: 'Communication Test', icon: Mic, badge: 'Live NLP' },
     { key: 'technical' as NavItemKey, label: 'Technical Readiness', icon: Cpu, badge: 'Role Test' },
-    { key: 'roadmap' as NavItemKey, label: 'Learning Roadmap', icon: Compass, badge: 'Phase 4' },
-    { key: 'transition' as NavItemKey, label: 'Career Transition', icon: TrendingUp, badge: 'Phase 5' },
+    { key: 'roadmap' as NavItemKey, label: 'Learning Roadmap', icon: Compass, badge: 'Active' },
+    { key: 'transition' as NavItemKey, label: 'Career Transition', icon: TrendingUp, badge: 'Active' },
     { key: 'coach' as NavItemKey, label: 'AI Career Coach', icon: Bot, badge: 'Live AI' },
     { key: 'profile' as NavItemKey, label: 'Candidate Profile', icon: User, badge: 'SQLite' },
   ];

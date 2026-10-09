@@ -15,6 +15,8 @@ import { KnowledgeBaseSearchView } from './components/KnowledgeBaseSearchView.js
 import { AptitudeAssessmentView } from './components/AptitudeAssessmentView.js';
 import { CommunicationAssessmentView } from './components/CommunicationAssessmentView.js';
 import { TechnicalAssessmentView } from './components/TechnicalAssessmentView.js';
+import { LearningRoadmapView } from './components/LearningRoadmapView.js';
+import { CareerTransitionView } from './components/CareerTransitionView.js';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<NavItemKey>('dashboard');
@@ -231,6 +233,18 @@ export default function App() {
             <CommunicationAssessmentView onComplete={loadData} />
           ) : currentTab === 'technical' ? (
             <TechnicalAssessmentView onComplete={loadData} targetCareer={profile?.targetCareer} />
+          ) : currentTab === 'roadmap' ? (
+            <LearningRoadmapView
+              initialTarget={selectedGapRole || profile?.targetCareer || 'Data Analyst / Junior ML Engineer'}
+              onNavigateToTransition={() => setCurrentTab('transition')}
+              onNavigateToCoach={() => setCurrentTab('coach')}
+            />
+          ) : currentTab === 'transition' && profile ? (
+            <CareerTransitionView
+              profile={profile}
+              onNavigateToRoadmap={() => setCurrentTab('roadmap')}
+              onNavigateToCoach={() => setCurrentTab('coach')}
+            />
           ) : currentTab === 'profile' && profile ? (
             <ProfileView
               initialProfile={profile}

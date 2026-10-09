@@ -183,27 +183,52 @@ export async function calculateDetailedSkillGap(
 }> {
   const db = await getDatabase();
 
-  const stmt = db.prepare(`
+  // 1. Try exact code or id first
+  let stmt = db.prepare(`
     SELECT id, code, title, dataset_source, description, skills_json, source_uri
     FROM occupations
-    WHERE code = :target OR id = :target OR title LIKE :likeTarget
+    WHERE (code = :target OR id = :target)
     LIMIT 1
   `);
-
-  stmt.bind({
-    ':target': targetOccupationCodeOrId,
-    ':likeTarget': `%${targetOccupationCodeOrId}%`
-  });
-
+  stmt.bind({ ':target': targetOccupationCodeOrId });
   let row: RawOccupationRow | null = null;
   if (stmt.step()) {
     row = stmt.getAsObject() as unknown as RawOccupationRow;
   }
   stmt.free();
 
+  // 2. If not found by exact code, search by title keywords with populated skills
   if (!row) {
-    // Default to first data analyst occupation
-    const fallbackStmt = db.prepare(`SELECT * FROM occupations WHERE title LIKE '%Data Analyst%' LIMIT 1`);
+    const words = targetOccupationCodeOrId.split(/[\s/,]+/).filter(w => w.length >= 3);
+    const w1 = words[0] || 'Data';
+    const w2 = words[1] || w1;
+
+    stmt = db.prepare(`
+      SELECT id, code, title, dataset_source, description, skills_json, source_uri
+      FROM occupations
+      WHERE (title LIKE :exactLike OR (title LIKE :w1 AND title LIKE :w2) OR title LIKE :w1)
+        AND length(skills_json) > 10
+      ORDER BY CASE WHEN dataset_source = 'O*NET 29.1' THEN 1 ELSE 2 END
+      LIMIT 1
+    `);
+    stmt.bind({
+      ':exactLike': `%${targetOccupationCodeOrId}%`,
+      ':w1': `%${w1}%`,
+      ':w2': `%${w2}%`
+    });
+    if (stmt.step()) {
+      row = stmt.getAsObject() as unknown as RawOccupationRow;
+    }
+    stmt.free();
+  }
+
+  // 3. Fallback to first high-quality O*NET occupation
+  if (!row) {
+    const fallbackStmt = db.prepare(`
+      SELECT * FROM occupations 
+      WHERE dataset_source = 'O*NET 29.1' AND length(skills_json) > 10 
+      LIMIT 1
+    `);
     if (fallbackStmt.step()) {
       row = fallbackStmt.getAsObject() as unknown as RawOccupationRow;
     }

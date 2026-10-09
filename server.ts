@@ -161,7 +161,7 @@ app.get('/api/knowledge-base/search', async (req: Request, res: Response) => {
 });
 
 // 3. Resume Upload & Parsing (PDF, DOCX, TXT)
-app.post('/api/resume/upload', upload.single('resume'), async (req: Request, res: Response) => {
+app.post('/api/resume/upload', upload.single('resume') as any, async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: 'No resume file uploaded' });
@@ -385,23 +385,23 @@ app.get('/api/dashboard', async (_req: Request, res: Response) => {
         {
           id: 'act_1',
           priority: 'High',
-          category: 'Skill Gap',
-          title: `Acquire ${realCareerMatches[0]?.missingSkills[0] || 'Target Domain Tool'}`,
-          reason: `Addresses primary missing qualification for "${realCareerMatches[0]?.title}" (${realCareerMatches[0]?.matchScore}% Match).`
+          category: 'Learning Roadmap',
+          title: `Personalized 5-Stage Roadmap for ${profile.targetCareer}`,
+          reason: `Step-by-step curriculum targeting "${realCareerMatches[0]?.missingSkills[0] || 'Core Tools'}" with verified projects & certifications.`
         },
         {
           id: 'act_2',
-          priority: 'Medium',
-          category: 'Aptitude Practice',
-          title: 'Target Data Interpretation Speed',
-          reason: `Boost Quantitative Aptitude score (Current: ${employability.components.aptitude.score}%).`
+          priority: 'High',
+          category: 'Career Transition',
+          title: `Transition Feasibility: ${profile.currentCareer} → ${profile.targetCareer}`,
+          reason: `Evaluate cross-role transferable competencies, deficit delta, and strategic bridge roadmap.`
         },
         {
           id: 'act_3',
           priority: 'Medium',
-          category: 'Speech Delivery',
-          title: 'Complete 2-Minute Technical Speech Assessment',
-          reason: `Refine communication delivery (Current: ${employability.components.communication.score}%).`
+          category: 'Aptitude Practice',
+          title: 'Target Data Interpretation Speed',
+          reason: `Boost Quantitative Aptitude score (Current: ${employability.components.aptitude.score}%).`
         }
       ]
     });
@@ -479,7 +479,91 @@ app.get('/api/assessments/latest', async (_req: Request, res: Response) => {
   }
 });
 
-// 8. Server-Side Gemini Career Advice / Explanation
+import { 
+  generatePersonalizedRoadmap, 
+  explainRoadmapStageWithGemini 
+} from './src/server/roadmapEngine.js';
+import { 
+  analyzeCareerTransition 
+} from './src/server/transitionEngine.js';
+
+// 12. PHASE 4: Personalized Learning Roadmap Generator
+app.get('/api/growth/roadmap', async (req: Request, res: Response) => {
+  try {
+    const target = String(req.query.target || '').trim();
+    const profile = await getUserProfile();
+    const targetCareer = target || profile.targetCareer;
+
+    const roadmap = await generatePersonalizedRoadmap(profile, targetCareer);
+    res.json(roadmap);
+  } catch (err: any) {
+    console.error('Failed to generate learning roadmap:', err);
+    res.status(500).json({ error: 'Failed to generate learning roadmap', details: err.message });
+  }
+});
+
+app.post('/api/growth/roadmap/explain-stage', async (req: Request, res: Response) => {
+  try {
+    const { stage, targetTitle } = req.body;
+    if (!stage) {
+      res.status(400).json({ error: 'Stage object is required' });
+      return;
+    }
+    const profile = await getUserProfile();
+    const explanation = await explainRoadmapStageWithGemini(
+      profile, 
+      targetTitle || profile.targetCareer, 
+      stage
+    );
+    res.json({ explanation });
+  } catch (err: any) {
+    console.error('Failed to explain roadmap stage:', err);
+    res.status(500).json({ error: 'Stage explanation failed', details: err.message });
+  }
+});
+
+// 13. PHASE 4: Career Transition Intelligence Engine
+app.get('/api/growth/transition', async (req: Request, res: Response) => {
+  try {
+    const current = String(req.query.current || '').trim();
+    const target = String(req.query.target || '').trim();
+    const profile = await getUserProfile();
+
+    const analysis = await analyzeCareerTransition(
+      profile,
+      current || profile.currentCareer,
+      target || profile.targetCareer
+    );
+    res.json(analysis);
+  } catch (err: any) {
+    console.error('Failed to analyze career transition:', err);
+    res.status(500).json({ error: 'Career transition analysis failed', details: err.message });
+  }
+});
+
+// Quick career options helper for selecting target roles in growth views
+app.get('/api/growth/career-options', async (_req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const stmt = db.prepare(`
+      SELECT code, title, dataset_source, salary_median
+      FROM occupations
+      WHERE dataset_source = 'O*NET 29.1'
+      ORDER BY title ASC
+      LIMIT 100
+    `);
+    const options: any[] = [];
+    while (stmt.step()) {
+      options.push(stmt.getAsObject());
+    }
+    stmt.free();
+    res.json({ options });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch career options', details: err.message });
+  }
+});
+
+// 14. Enhanced Multi-Agent AI Career Coach (Grounded in Profile, Assessments, Skill Gaps, and Matches)
 app.post('/api/gemini/advisor', async (req: Request, res: Response) => {
   try {
     const { prompt, topic } = req.body;
@@ -489,26 +573,85 @@ app.post('/api/gemini/advisor', async (req: Request, res: Response) => {
     }
 
     const profile = await getUserProfile();
-    const systemPrompt = `You are CareerIQ AI Career Coach. 
-The user is: ${profile.name} (${profile.headline}).
-Persona: ${profile.persona}. Target Career: ${profile.targetCareer}.
-Technical Skills: ${profile.technicalSkills.join(', ')}.
-Education: ${profile.education.map(e => `${e.degree} in ${e.field} from ${e.institution}`).join('; ')}.
-Projects: ${profile.projects.map(p => p.title).join('; ')}.
+    const latestScores = await getLatestAssessmentScores(profile.id);
+    const topMatches = await matchCareersAgainstKnowledgeBase(profile, 3);
+    const skillGap = await calculateDetailedSkillGap(profile, profile.targetCareer);
 
-Ground all answers in empirical occupational requirements and the user's documented background. 
-Never fabricate unrealistic claims or hallucinate experience they do not have.
-Keep answers structured, crisp, actionable, and encouraging.`;
+    // Build comprehensive multi-agent context
+    const assessmentSummary = [
+      latestScores.aptitude ? `Aptitude: ${latestScores.aptitude.score}% accuracy` : 'Aptitude: Baseline diagnostic',
+      latestScores.communication ? `Communication: ${latestScores.communication.score}% confidence, ${latestScores.communication.details?.wordsPerMinute || 135} WPM` : 'Communication: Baseline diagnostic',
+      latestScores.technical ? `Technical: ${latestScores.technical.score}% mastery` : 'Technical: Not yet attempted'
+    ].join(' | ');
+
+    const topMatchesSummary = topMatches.map(m => `"${m.title}" (${m.matchScore}% Match, ${m.datasetSource})`).join(', ');
+    const criticalMissingSkills = skillGap.missingSkills.slice(0, 5).map(s => s.skillName).join(', ');
+    const strongSkills = skillGap.strongSkills.slice(0, 5).map(s => s.skillName).join(', ');
+
+    const systemPrompt = `You are CareerIQ AI Career Coach — an intelligent multi-agent career intelligence advisor.
+You have direct, real-time access to the user's verified candidate profile and empirical analytics:
+
+=== CANDIDATE PROFILE ===
+Name: ${profile.name} (${profile.headline})
+Persona: ${profile.persona}
+Current Career: ${profile.currentCareer}
+Target Career: ${profile.targetCareer}
+Technical Skills: ${profile.technicalSkills.join(', ')}
+Soft Skills: ${profile.softSkills.join(', ')}
+Education: ${profile.education.map(e => `${e.degree} in ${e.field} from ${e.institution}`).join('; ')}
+Experience: ${profile.experience.map(e => `${e.role} at ${e.company} (${e.duration})`).join('; ')}
+Projects: ${profile.projects.map(p => p.title).join('; ')}
+
+=== VERIFIED ASSESSMENT RESULTS (PHASE 3) ===
+${assessmentSummary}
+
+=== OCCUPATIONAL RECOMMENDATIONS & SKILL GAPS ===
+Top Career Matches: ${topMatchesSummary}
+Target Career Evaluated: ${skillGap.occupation.title} (${skillGap.occupation.datasetSource})
+Strong Competencies (Verified): ${strongSkills || 'None yet'}
+Critical Missing Skills (Verified Gaps): ${criticalMissingSkills || 'Target domain tools'}
+Overall Skill Coverage: ${skillGap.gapCoveragePercent}%
+
+=== COACHING INSTRUCTIONS ===
+1. Ground all answers strictly in the candidate's actual documented background and occupational standards.
+2. Directly reference their verified assessment scores and skill gaps when giving advice.
+3. When recommending learning pathways or skills, always cite verifiable, high-quality resources (such as official documentation, Coursera / edX / Kaggle courses, MDN, or O*NET standards).
+4. Never hallucinate experience they do not have, and never invent fake datasets.
+5. Provide structured, crisp, highly actionable answers with bold key points and concrete steps.`;
 
     const answer = await generateExplainableGuidance(prompt, systemPrompt);
-    logOrchestratorEvent('CareerCoachAgent', 'ADVICE_GENERATED', { topic, promptLength: prompt.length });
+    logOrchestratorEvent('CareerCoachAgent', 'ADVICE_GENERATED', { 
+      topic, 
+      promptLength: prompt.length,
+      targetCareer: profile.targetCareer 
+    });
 
-    res.json({ reply: answer });
+    res.json({ 
+      reply: answer,
+      contextMeta: {
+        targetCareer: skillGap.occupation.title,
+        skillCoverage: skillGap.gapCoveragePercent,
+        topMatchesCount: topMatches.length,
+        hasAssessmentData: Boolean(latestScores.aptitude || latestScores.communication || latestScores.technical)
+      }
+    });
   } catch (err: any) {
     res.status(500).json({ 
       error: 'Gemini request failed', 
       details: err.message || 'Check GEMINI_API_KEY configuration in Settings > Secrets' 
     });
+  }
+});
+
+import { runFullIntegrationAndEvaluationSuite } from './src/server/integrationTest.js';
+
+// 15. PHASE 5: Automated Integration & Evaluation Suite Runner
+app.get('/api/system/test-suite', async (_req: Request, res: Response) => {
+  try {
+    const summary = await runFullIntegrationAndEvaluationSuite();
+    res.json(summary);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Test execution failed', details: err.message });
   }
 });
 

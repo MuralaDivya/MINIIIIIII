@@ -135,7 +135,11 @@ EVALUATE AND RETURN ONLY VALID JSON:
 
   for (const model of modelsToAttempt) {
     try {
-      const response = await ai.models.generateContent({
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout calling ${model}`)), 8000)
+      );
+
+      const apiPromise = ai.models.generateContent({
         model,
         contents: evaluationPrompt,
         config: {
@@ -144,13 +148,15 @@ EVALUATE AND RETURN ONLY VALID JSON:
         }
       });
 
-      if (response.text) {
+      const response = await Promise.race([apiPromise, timeoutPromise]);
+
+      if (response && response.text) {
         qualitativeData = JSON.parse(response.text.trim());
         break;
       }
     } catch (err: any) {
       console.warn(`Gemini communication evaluation with ${model} failed:`, err?.message || err);
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 150));
     }
   }
 

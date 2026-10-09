@@ -404,7 +404,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <p className="text-[11px] text-slate-400">{action.reason}</p>
                 </div>
                 <button
-                  onClick={() => onNavigate(action.category.includes('Skill') ? 'skill-gap' : action.category.includes('Speech') ? 'communication' : 'aptitude')}
+                  onClick={() => onNavigate(
+                    action.category.includes('Roadmap') 
+                      ? 'roadmap' 
+                      : action.category.includes('Transition') 
+                      ? 'transition' 
+                      : action.category.includes('Skill') 
+                      ? 'skill-gap' 
+                      : action.category.includes('Speech') 
+                      ? 'communication' 
+                      : 'aptitude'
+                  )}
                   className="px-2.5 py-1.5 rounded-lg bg-[#0f2249] hover:bg-blue-600 text-white text-xs font-medium transition-colors shrink-0"
                 >
                   Start
